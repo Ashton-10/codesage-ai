@@ -20,23 +20,47 @@ def get_current_user(
     )
 
     try:
+        print("\n==============================")
+        print(" TOKEN RECEIVED:")
+        print(token)
+
         payload = jwt.decode(
             token,
             settings.SECRET_KEY,
             algorithms=[settings.ALGORITHM]
         )
 
+        print("\n PAYLOAD:")
+        print(payload)
+
         email = payload.get("sub")
 
+        print("\n EMAIL FROM TOKEN:")
+        print(email)
+
         if email is None:
+            print(" No 'sub' found in token.")
             raise credentials_exception
 
-    except JWTError:
+    except JWTError as e:
+        print("\n JWT ERROR:")
+        print(str(e))
         raise credentials_exception
 
-    user = db.query(User).filter(User.email == email).first()
+    print("\n Searching database...")
+
+    user = db.query(User).filter(
+        User.email == email
+    ).first()
+
+    print("\n USER FOUND:")
+    print(user)
 
     if user is None:
+        print("User not found in database.")
         raise credentials_exception
+
+    print("✅ Authentication Successful")
+    print("==============================\n")
 
     return user
