@@ -1,74 +1,139 @@
-import { useEffect, useState } from "react";
-
+import { useEffect, useMemo, useState } from "react";
+import api from "../services/api";
+import LoadingSpinner from "../components/common/LoadingSpinner";
 import {
-  Shield,
-  Gauge,
-  Star,
-  FileCode,
-} from "lucide-react";
-
-import DashboardCard from "../components/dashboard/DashboardCard";
-import WelcomeCard from "../components/dashboard/WelcomeCard";
-import ReviewChart from "../components/dashboard/ReviewChart";
-import RecentReviews from "../components/dashboard/RecentReviews";
-
-import { getCurrentUser } from "../services/dashboard";
+  ScoreChart,
+  LanguageChart,
+} from "../components/dashboard/ReviewChart";
 
 export default function Dashboard() {
-  const [user, setUser] = useState(null);
+  const [reviews, setReviews] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function loadUser() {
-      try {
-        const me = await getCurrentUser();
-        setUser(me);
-      } catch (error) {
-        console.error("Failed to load user:", error);
-      }
-    }
-
-    loadUser();
+    loadDashboard();
   }, []);
 
+  const loadDashboard = async () => {
+  try {
+    const res = await api.get("/review/history");
+    setReviews(res.data);
+  } catch (err) {
+    console.error(err);
+  } finally {
+    setLoading(false);
+  }
+};
+
+  const stats = useMemo(() => {
+    const total = reviews.length;
+
+    if (total === 0) {
+      return {
+        total: 0,
+        avgScore: 0,
+        totalBugs: 0,
+        avgSecurity: 0,
+        avgPerformance: 0,
+      };
+    }
+
+    return {
+      total,
+      avgScore: (
+        reviews.reduce((a, b) => a + b.score, 0) / total
+      ).toFixed(1),
+
+      totalBugs: reviews.reduce(
+        (a, b) => a + b.bugs,
+        0
+      ),
+
+      avgSecurity: (
+        reviews.reduce(
+          (a, b) => a + b.security_score,
+          0
+        ) / total
+      ).toFixed(1),
+
+      avgPerformance: (
+        reviews.reduce(
+          (a, b) => a + b.performance_score,
+          0
+        ) / total
+      ).toFixed(1),
+    };
+  }, [reviews]);
+  if (loading) {
   return (
-    <div>
-      <WelcomeCard
-        username={user?.username || "Developer"}
-      />
+    <div className="min-h-screen bg-slate-950 text-white">
+      <LoadingSpinner text="Loading Dashboard..." />
+    </div>
+  );
+}
 
-      <div className="grid grid-cols-4 gap-6">
-        <DashboardCard
-          title="AI Score"
-          value="94%"
-          icon={Star}
-          color="text-yellow-400"
-        />
+  return (
+    <div className="min-h-screen bg-slate-950 text-white p-8">
 
-        <DashboardCard
-          title="Security"
-          value="9.6"
-          icon={Shield}
-          color="text-green-400"
-        />
+      <h1 className="text-4xl font-bold mb-8">
+        📊 Dashboard
+      </h1>
 
-        <DashboardCard
-          title="Performance"
-          value="9.3"
-          icon={Gauge}
-          color="text-blue-400"
-        />
+      <div className="grid md:grid-cols-4 gap-6 mb-10">
 
-        <DashboardCard
+        <Card
           title="Reviews"
-          value="28"
-          icon={FileCode}
-          color="text-purple-400"
+          value={stats.total}
         />
+
+        <Card
+          title="Average Score"
+          value={stats.avgScore}
+        />
+
+        <Card
+          title="Total Bugs"
+          value={stats.totalBugs}
+        />
+
+        <Card
+          title="Security"
+          value={`${stats.avgSecurity}/10`}
+        />
+
       </div>
 
-      <ReviewChart />
+      <div className="grid lg:grid-cols-2 gap-8">
 
-      <RecentReviews />
+        <div className="bg-slate-900 rounded-2xl p-6 shadow-xl">
+          <h2 className="text-2xl font-bold mb-5">
+            Score Trend
+          </h2>
+
+          <ScoreChart reviews={reviews} />
+        </div>
+
+        <div className="bg-slate-900 rounded-2xl p-6 shadow-xl">
+          <h2 className="text-2xl font-bold mb-5">
+            Languages Used
+          </h2>
+
+          <LanguageChart reviews={reviews} />
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
+function Card({ title, value }) {
+  return (
+    <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-6 shadow-lg border border-slate-700">
+      <p className="text-slate-400">{title}</p>
+
+      <h1 className="text-4xl font-bold mt-3">
+        {value}
+      </h1>
     </div>
   );
 }

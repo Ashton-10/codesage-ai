@@ -1,15 +1,58 @@
-export default function ReviewChart() {
-  return (
-    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 mt-8">
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  ArcElement,
+  Tooltip,
+  Legend,
+} from "chart.js";
 
-      <h2 className="text-xl font-semibold mb-6">
-        Review Analytics
-      </h2>
+import { Line, Doughnut } from "react-chartjs-2";
 
-      <div className="h-72 flex items-center justify-center text-slate-500">
-        Chart Coming Soon 
-      </div>
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  ArcElement,
+  Tooltip,
+  Legend
+);
 
-    </div>
-  );
+export function ScoreChart({ reviews }) {
+  const data = {
+    labels: reviews.map((_, i) => `Review ${i + 1}`),
+    datasets: [
+      {
+        label: "Score",
+        data: reviews.map((r) => r.score),
+        borderColor: "#6366F1",
+        backgroundColor: "#6366F1",
+        tension: 0.4,
+      },
+    ],
+  };
+
+  return <Line data={data} />;
+}
+
+export function LanguageChart({ reviews }) {
+  const count = {};
+
+  reviews.forEach((r) => {
+    count[r.language] = (count[r.language] || 0) + 1;
+  });
+
+  const data = {
+    labels: Object.keys(count),
+    datasets: [
+      {
+        data: Object.values(count),
+      },
+    ],
+  };
+
+  return <Doughnut data={data} />;
 }

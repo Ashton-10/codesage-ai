@@ -1,15 +1,22 @@
 import json
-import traceback
+import time
 
 from google import genai
 from app.core.settings import settings
 
 client = genai.Client(api_key=settings.GEMINI_API_KEY)
 
-MODEL = "models/gemini-3.5-flash"
+MODELS = [
+    "models/gemini-3.5-flash",
+    "models/gemini-3.1-flash-lite",
+    "models/gemini-2.0-flash-lite",
+]
 
 
 def review_code(language: str, code: str):
+    # Limit very large inputs
+    code = code[:20000]
+
     prompt = f"""
 You are a senior software engineer.
 
@@ -33,40 +40,54 @@ Code:
 {code}
 """
 
-    try:
+    last_error = None
+
+    for model in MODELS:
+
         print("=" * 60)
-        print("Using model:", MODEL)
+        print("Trying:", model)
 
-        response = client.models.generate_content(
-            model=MODEL,
-            contents=prompt,
-        )
+        for attempt in range(3):
 
-        print("\n========== RAW RESPONSE ==========")
-        print(response)
-        print("==================================")
+            try:
 
-        text = response.text
+                response = client.models.generate_content(
+                    model=model,
+                    contents=prompt,
+                )
 
-        print("\n========== RESPONSE TEXT ==========")
-        print(text)
-        print("===================================")
+                text = response.text.strip()
 
-        if text.startswith("```json"):
-            text = text.replace("```json", "").replace("```", "").strip()
+                if text.startswith("```json"):
+                    text = text.replace("```json", "").replace("```", "").strip()
+                elif text.startswith("```"):
+                    text = text.replace("```", "").strip()
 
-        elif text.startswith("```"):
-            text = text.replace("```", "").strip()
+                data = json.loads(text)
 
-        data = json.loads(text)
+                print("Success with", model)
 
-        print("\n========== PARSED JSON ==========")
-        print(data)
-        print("=================================")
+                return data
 
-        return data
+            except Exception as e:
 
-    except Exception:
-        print("\n========== FULL TRACEBACK ==========\n")
-        traceback.print_exc()
-        raise
+                last_error = e
+
+                print(f"{model} failed (attempt {attempt + 1}/3)")
+                print(e)
+
+                if "503" in str(e):
+                    print("Gemini busy... waiting 5 seconds")
+                    time.sleep(5)
+                    continue
+
+                if "429" in str(e):
+                    print("Rate limit hit... waiting 10 seconds")
+                    time.sleep(10)
+                    continue
+
+                break
+
+    raise Exception(
+        f"All Gemini models failed.\nLast error: {last_error}"
+    )

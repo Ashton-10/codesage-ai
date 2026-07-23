@@ -12,7 +12,7 @@ export default function AnalyzeButton({
     >
       <Sparkles size={20} />
 
-      {loading ? "Analyzing..." : "Analyze Code"}
+      <LoadingSpinner text="Loading Profile..." />
     </button>
   );
 }

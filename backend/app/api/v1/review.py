@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.schemas.github import (
     GithubReviewRequest,
-    GithubReviewResponse
+    GithubReviewResponse,
 )
 from app.services.github import clone_and_read_repo
 
@@ -36,7 +36,7 @@ router = APIRouter(
     prefix="/review",
     tags=["AI Review"]
 )
-@router.post("/github", response_model=ReviewResponse)
+@router.post("/github", response_model=GithubReviewResponse)
 def review_github(
     request: GithubReviewRequest,
     db: Session = Depends(get_db),
@@ -44,16 +44,17 @@ def review_github(
 ):
     try:
         code = clone_and_read_repo(request.repo_url)
-    except Exception as e:
-        raise HTTPException(
-            status_code=400,
-            detail=str(e)
+
+        result = review_code(
+            language="repository",
+            code=code
         )
 
-    result = review_code(
-        language="repository",
-        code=code
-    )
+    except Exception as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"AI service unavailable.\n{str(e)}"
+        )
 
     save_review(
         db=db,
@@ -69,8 +70,13 @@ def review_github(
         quality_score=result["quality_score"],
     )
 
-    return ReviewResponse(
-        review=result["review"]
+    return GithubReviewResponse(
+        score=result["score"],
+        bugs=result["bugs"],
+        security_score=result["security_score"],
+        performance_score=result["performance_score"],
+        quality_score=result["quality_score"],
+        review=result["review"],
     )
 @router.post("/upload", response_model=UploadResponse)
 async def upload_review(
@@ -80,12 +86,19 @@ async def upload_review(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    code = (await file.read()).decode("utf-8")
+    try:
+        code = (await file.read()).decode("utf-8")
 
-    result = review_code(
-        language,
-        code
-    )
+        result = review_code(
+            language,
+            code
+        )
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"AI service unavailable.\n{str(e)}"
+        )
 
     save_review(
         db=db,
@@ -111,10 +124,16 @@ def review(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    result = review_code(
-        request.language,
-        request.code
-    )
+    try:
+        result = review_code(
+            request.language,
+            request.code
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"AI service unavailable.\n{str(e)}"
+        )
 
     save_review(
         db=db,
@@ -131,7 +150,12 @@ def review(
     )
 
     return ReviewResponse(
-        review=result["review"]
+        score=result["score"],
+        bugs=result["bugs"],
+        security_score=result["security_score"],
+        performance_score=result["performance_score"],
+        quality_score=result["quality_score"],
+        review=result["review"],
     )
 
 @router.get("/history", response_model=list[ReviewHistory])
@@ -220,24 +244,3 @@ def remove_review(
     return {
         "message": "Review deleted successfully"
     }
-from fastapi import APIRouter
-from pydantic import BaseModel
-
-router = APIRouter(prefix="/review", tags=["AI Review"])
-
-
-class ReviewRequest(BaseModel):
-    code: str
-
-
-from app.services.gemini import review_code
-
-
-@router.post("/analyze")
-def analyze_code(data: ReviewRequest):
-    result = review_code(
-        language="python",
-        code=data.code
-    )
-
-    return result
